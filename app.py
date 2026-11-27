@@ -466,7 +466,7 @@ class Workout:
         if self.phase in ("align", "countdown"):
             if not aligned:
                 self.phase = "align"
-                self.feedback = "옆모습이 가이드에 들어오도록 위치를 조정하세요."
+                self.feedback = "몸의 옆면이 안내선에 맞도록 위치를 조정해 주세요."
                 self.countdown_frame_at = None
             elif self.phase == "align" or now - self.countdown_frame_at > 0.45:
                 self.phase = "countdown"
@@ -485,7 +485,7 @@ class Workout:
                     self.exercise_index += 1
                     self._reset_exercise()
                     self.phase = "align"
-                    self.feedback = "다음 운동의 가이드에 맞춰 주세요."
+                    self.feedback = "다음 운동의 안내선에 자세를 맞춰 주세요."
                 else:
                     self._start_set(now)
             return
@@ -514,7 +514,7 @@ class Workout:
             self._record(finished_at)
         if finished_exercise and self.exercise_index == len(self.routine.exercises) - 1:
             self.phase = "complete"
-            self.feedback = "설정한 루틴을 모두 완료했어요."
+            self.feedback = "선택한 운동을 모두 마쳤어요."
         else:
             self.phase = "rest"
             self.deadline = now + self.routine.rest
@@ -734,7 +734,7 @@ def standby_frame() -> np.ndarray:
 
 COLUMNS = [field.name for field in fields(Record)]
 LEGACY_COLUMNS = COLUMNS[:-3]
-RECORD_HEADERS = ["날짜", "운동", "성공 / 목표", "세트", "운동 시간", "자세 정확도", "이전 대비", "판정 근거"]
+RECORD_HEADERS = ["날짜", "운동", "인정 / 목표 횟수", "완료 / 목표 세트", "운동 시간", "동작 인정률", "시간 단축률", "판정 내용"]
 PALETTE = ("#536df0", "#13856b", "#aa5d1d")
 
 
@@ -749,8 +749,8 @@ def percentage(value):
 
 def accuracy_basis(successes: int, attempts: int) -> str:
     if not attempts:
-        return "판정된 시도가 없어 정확도를 계산할 수 없어요."
-    return f"성공 {successes}회 ÷ 판정 {attempts}회 = {percentage(successes / attempts * 100)}"
+        return "아직 판정한 동작이 없어요."
+    return f"인정 {successes}회 ÷ 판정한 동작 {attempts}회 = {percentage(successes / attempts * 100)}"
 
 
 def read_reasons(value) -> dict[str, int]:
@@ -914,7 +914,7 @@ def _line_chart(series: pd.Series, color, label: str):
 def charts(frame: pd.DataFrame):
     daily_minutes = frame.groupby("date")["active_seconds"].sum() / 60
     completed = frame[frame["complete"]]
-    pace_label = "완료 기록이 생기면 변화가 표시됩니다."
+    pace_label = "운동을 마치면 세트당 시간이 표시돼요."
     pace = pd.Series(dtype=float)
     if not completed.empty:
         last = completed.iloc[-1]
@@ -933,7 +933,7 @@ def charts(frame: pd.DataFrame):
     order = [exercise.value for exercise in Exercise]
     rates = (counts["successful_reps"] * 100 / counts["judged_attempts"].replace(0, np.nan)).reindex(order)
     korean_font = _font()
-    labels = order if korean_font.get_name() != "DejaVu Sans" else ["Squat", "Push-up", "Sit-up"]
+    labels = order
     ax.set_xlim(-.5, len(order) - .5)
     ax.set_xticks(range(len(order)), labels, fontproperties=korean_font)
     for index, rate in enumerate(rates):
@@ -943,8 +943,8 @@ def charts(frame: pd.DataFrame):
                         textcoords="offset points", ha="center", fontsize=8,
                         color="white" if rate >= 30 else PALETTE[index])
     return (
-        _line_chart(daily_minutes, PALETTE[0], "min"),
-        _line_chart(pace, PALETTE[1], "sec"),
+        _line_chart(daily_minutes, PALETTE[0], "분"),
+        _line_chart(pace, PALETTE[1], "초"),
         accuracy_figure,
         pace_label,
     )
@@ -1097,7 +1097,7 @@ class CameraTrainer:
                 self.save_error = ""
             except (OSError, ValueError):
                 LOG.exception("CSV 저장 실패")
-                self.save_error = "기록을 저장하지 못했어요. CSV를 열어 둔 프로그램을 닫고 다시 시도하세요."
+                self.save_error = "기록을 저장하지 못했어요. 기록 파일을 열어 둔 프로그램을 닫고 다시 시도해 주세요."
 
     def _still_running(self):
         with self.lock:
@@ -1204,7 +1204,13 @@ footer { display: none !important; }
 }
 #intro h1 { font-size: clamp(24px, 4vw, 38px); font-weight: 800; letter-spacing: -.055em; color: #fff; margin: 0; }
 #intro p { color: #c0cae3; margin: 7px 0 0; font-size: 14px; }
-#intro h1 strong { color: #c1f87c; }
+/* 번역기가 추가하는 글자 요소에도 어두운 배경의 대비를 유지한다. */
+#intro, #intro *,
+#feedback .coaching-message, #feedback .coaching-message *,
+#exercise-choice .token, #exercise-choice .token * {
+    color: #fff !important;
+    -webkit-text-fill-color: #fff !important;
+}
 #routine, #coach, #insights, #camera-card {
     background: #fff;
     border: 1px solid #e0e4ee;
@@ -1217,6 +1223,7 @@ footer { display: none !important; }
     font-size: 17px; letter-spacing: -.035em; margin: 0;
 }
 #routine-settings { align-items: start; }
+#exercise-choice .token { background: #4359d4; }
 #camera-card, #coach { min-width: 0 !important; }
 #workspace.pending, #workspace .pending, #insights .pending { opacity: 1 !important; }
 #camera-image { background: #171e23; overflow: hidden; border-radius: 11px; }
@@ -1236,9 +1243,6 @@ footer { display: none !important; }
 }
 #feedback .coaching-message[data-tone="correction"] {
     border-color: #f7c76a; background: #3a290d; color: #fff2d4;
-}
-#feedback .coaching-message :is(.coaching-label, .coaching-cue, .coaching-detail) {
-    color: inherit !important;
 }
 #feedback .coaching-label { font-size: 14px; font-weight: 700; }
 #feedback .coaching-cue {
@@ -1275,14 +1279,26 @@ footer { display: none !important; }
 }
 """
 
+# 한국어 원문이 브라우저 자동 번역으로 다시 바뀌는 것을 방지한다.
+KOREAN_PAGE_HEAD = """
+<meta name="google" content="notranslate">
+<meta http-equiv="Content-Language" content="ko">
+"""
+KOREAN_PAGE_JS = """() => {
+    document.documentElement.lang = "ko";
+    document.documentElement.setAttribute("translate", "no");
+    document.documentElement.classList.add("notranslate");
+    document.body.setAttribute("translate", "no");
+}"""
+
 PHASES = {
     "idle": "시작 전", "opening": "카메라 준비 중", "align": "위치 맞추기",
     "countdown": "시작 카운트다운", "exercise": "운동 진행 중", "rest": "휴식 중",
-    "complete": "루틴 완료", "stopping": "저장 중", "stopped": "운동 종료",
+    "complete": "운동 완료", "stopping": "저장 중", "stopped": "운동 종료",
     "error": "카메라 확인",
 }
 
-CAMERA_IMAGE = '<img src="{}" width="960" height="540" alt="웹캠과 전신 위치 가이드">'
+CAMERA_IMAGE = '<img src="{}" width="960" height="540" alt="웹캠 영상과 자세 안내선">'
 STANDBY_VIEW = CAMERA_IMAGE.format("/standby.jpg")
 LIVE_VIEW = CAMERA_IMAGE.format("/camera.mjpg")
 
@@ -1299,7 +1315,7 @@ def _integer(value, label):
 
 def _coaching_banner(message, detail="", corrective=False):
     tone = "correction" if corrective else "normal"
-    heading = "자세 교정" if corrective else "실시간 코칭"
+    heading = "자세 교정" if corrective else "운동 안내"
     detail_html = f'<span class="coaching-detail">{escape(detail)}</span>' if detail else ""
     return (
         f'<div class="coaching-message" data-tone="{tone}" role="status" aria-live="polite">'
@@ -1312,16 +1328,16 @@ def _review_detail(exercise, successes, attempts, reasons, interruptions, unfini
     lines = [f"**{accuracy_basis(successes, attempts)}**", exercise_criteria(exercise)]
     reasons = sorted(reasons, key=lambda item: item[1], reverse=True)
     if reasons:
-        lines.append("불인정 사유")
+        lines.append("인정되지 않은 이유")
         lines.append("\n".join(f"- {reason} **{count}회**" for reason, count in reasons))
         advice = correction_advice(exercise, reasons[0][0])
         if advice:
-            lines.append(f"**다음 동작** · {advice}")
+            lines.append(f"**다음에는 이렇게 해 보세요** · {advice}")
     elif attempts:
-        lines.append("판정된 시도는 모두 기준을 충족했어요.")
+        lines.append("판정한 동작이 모두 기준을 충족했어요.")
     excluded = excluded_counts(interruptions, unfinished)
     if excluded:
-        lines.append(f"{excluded}는 정확도 계산에서 제외했어요.")
+        lines.append(f"{excluded}는 동작 인정률 계산에서 제외했어요.")
     return "\n\n".join(lines)
 
 
@@ -1340,7 +1356,7 @@ def _workout_review(data):
     if len(records) > 1:
         successes = sum(record.successful_reps for record in records)
         attempts = sum(record.judged_attempts for record in records)
-        parts.append(f"**전체 정확도 · {accuracy_basis(successes, attempts)}**")
+        parts.append(f"**전체 동작 인정률 · {accuracy_basis(successes, attempts)}**")
     for record in records:
         details = _review_detail(
             Exercise(record.exercise), record.successful_reps, record.judged_attempts,
@@ -1356,14 +1372,14 @@ def _live(data):
     active = data["busy"]
     exercise = data.get("exercise")
     count = f"## **{data['reps']}** / {data['target']}" if exercise else "## **0** / —"
-    track = f"{exercise} · 종목 {data['index']}/{data['items']} · 세트 {data['set']}/{data['sets']}" if exercise else "루틴을 설정하고 시작하세요."
+    track = f"{exercise} · 종목 {data['index']}/{data['items']} · 세트 {data['set']}/{data['sets']}" if exercise else "운동을 선택하고 시작해 주세요."
     label = PHASES[phase]
     if phase in ("countdown", "rest"):
         label += f" · {data['wait']}초"
     angle = data.get("angle")
     joint = f"{data['joint']} 각도" if exercise else "관절 각도"
     angle_text = "—" if angle is None or phase != "exercise" else f"{angle:.0f}°"
-    coach = data.get("feedback") or "운동을 시작하면 가이드가 표시됩니다."
+    coach = data.get("feedback") or "운동 시작을 누르면 자세 안내가 나와요."
     review, show_final_review = _workout_review(data)
     save_error = data["save_error"]
     settings_update = gr.update(interactive=not active)
@@ -1411,7 +1427,7 @@ def build_dashboard(trainer, history):
             frame = history.read()
         except (OSError, ValueError, KeyError, TypeError):
             LOG.exception("CSV 읽기 실패")
-            error = "운동 기록을 읽을 수 없어요. CSV 형식과 파일 사용 상태를 확인하세요."
+            error = "운동 기록을 불러오지 못했어요. 기록 파일이 손상되었거나 다른 프로그램에서 사용 중인지 확인해 주세요."
             frame = pd.DataFrame(columns=[
                 "date", "judged_attempts", "successful_reps", "active_seconds",
                 "improvement", "complete", "exercise",
@@ -1421,9 +1437,9 @@ def build_dashboard(trainer, history):
         today_basis = accuracy_basis(today["successful_reps"].sum(), today["judged_attempts"].sum())
         minutes, pace, scores, pace_note = charts(frame)
         return (
-            *live, _stat("오늘 운동 시간", duration), _stat("오늘 성공 횟수", successes),
-            _stat("오늘 자세 정확도", accuracy), _stat("최근 시간 단축률", improvement),
-            f"**오늘 정확도 계산** · {today_basis}", minutes, pace, scores, pace_note, history_rows(frame),
+            *live, _stat("오늘 운동 시간", duration), _stat("오늘 인정 횟수", successes),
+            _stat("오늘 동작 인정률", accuracy), _stat("이전 기록 대비 시간 단축률", improvement),
+            f"**오늘 동작 인정률 계산** · {today_basis}", minutes, pace, scores, pace_note, history_rows(frame),
             error or ("아직 저장된 운동 기록이 없어요." if frame.empty else ""), version,
         )
 
@@ -1449,7 +1465,7 @@ def build_dashboard(trainer, history):
 
     with gr.Blocks(
         title="AI PT 트레이너", theme=theme, css=STYLE, analytics_enabled=False,
-        fill_width=True,
+        fill_width=True, head=KOREAN_PAGE_HEAD, js=KOREAN_PAGE_JS,
     ) as dashboard:
         revision = gr.State(-1)
         timer = gr.Timer(.35, active=False)
@@ -1458,24 +1474,25 @@ def build_dashboard(trainer, history):
             elem_id="intro",
         )
         with gr.Column(elem_id="routine"):
-            gr.Markdown("## 루틴 설정", elem_id="routine-heading")
+            gr.Markdown("## 운동 계획", elem_id="routine-heading")
             with gr.Row(elem_id="routine-settings"):
                 exercises = gr.Dropdown(
                     [exercise.value for exercise in Exercise], value=[Exercise.SQUAT.value],
-                    multiselect=True, max_choices=3, label="운동 순서",
-                    info="선택한 순서로 진행됩니다.", scale=4, min_width=220,
+                    multiselect=True, max_choices=3, label="운동 종류",
+                    info="선택한 순서대로 운동해요.", scale=4, min_width=220,
+                    elem_id="exercise-choice",
                 )
                 reps = gr.Number(10, minimum=1, maximum=99, label="세트당 횟수", min_width=110)
-                sets = gr.Number(3, minimum=1, maximum=20, label="세트", min_width=98)
+                sets = gr.Number(3, minimum=1, maximum=20, label="세트 수", min_width=98)
                 rest = gr.Number(30, minimum=0, maximum=300, label="휴식 시간 (초)", min_width=120)
             with gr.Row():
-                voice = gr.Checkbox(label="한국어 음성 안내", value=True, scale=3, min_width=140)
-                stop_button = gr.Button("운동 종료 및 저장", interactive=False, min_width=150)
+                voice = gr.Checkbox(label="음성 안내", value=True, scale=3, min_width=140)
+                stop_button = gr.Button("종료하고 기록 저장", interactive=False, min_width=150)
                 start_button = gr.Button("운동 시작", variant="primary", min_width=120, elem_id="start")
         with gr.Row(elem_id="workspace", equal_height=False):
             with gr.Column(scale=7, elem_id="camera-card", min_width=280):
                 feedback = gr.HTML(
-                    _coaching_banner("운동을 시작하면 가이드가 표시됩니다."), elem_id="feedback",
+                    _coaching_banner("운동 시작을 누르면 자세 안내가 나와요."), elem_id="feedback",
                 )
                 review = gr.Markdown(visible=False, elem_id="feedback-review")
                 camera_view = gr.HTML(STANDBY_VIEW, elem_id="camera-image")
@@ -1486,15 +1503,15 @@ def build_dashboard(trainer, history):
             with gr.Column(scale=3, elem_id="coach", min_width=245):
                 phase = gr.Markdown("**시작 전**", elem_id="phase")
                 count = gr.Markdown("## **0** / —", elem_id="live-count")
-                track = gr.Markdown("루틴을 설정하고 시작하세요.", elem_id="track")
+                track = gr.Markdown("운동을 선택하고 시작해 주세요.", elem_id="track")
                 with gr.Row(elem_id="live-meter-row"):
                     elapsed = gr.Markdown(_stat("운동 시간", "00:00"), elem_classes=["stat"])
                     angle = gr.Markdown(_stat("관절 각도", "—"), elem_classes=["stat"])
                 voice_status = gr.Markdown(elem_id="voice-status")
                 save_message = gr.Markdown()
-                retry_button = gr.Button("기록 다시 저장", visible=False)
+                retry_button = gr.Button("저장 다시 시도", visible=False)
         with gr.Column(elem_id="insights"):
-            gr.Markdown("## 운동 통계", elem_id="insights-heading")
+            gr.Markdown("## 운동 기록", elem_id="insights-heading")
             with gr.Row():
                 total = gr.Markdown(elem_classes=["stat"])
                 successes = gr.Markdown(elem_classes=["stat"])
@@ -1503,14 +1520,14 @@ def build_dashboard(trainer, history):
             accuracy_explanation = gr.Markdown(elem_id="today-basis")
             with gr.Row():
                 with gr.Column(elem_classes=["chart"]):
-                    gr.Markdown("### 날짜별 운동 시간")
+                    gr.Markdown("### 하루 운동 시간")
                     daily = gr.Plot(show_label=False)
                 with gr.Column(elem_classes=["chart"]):
-                    gr.Markdown("### 세트 완료 시간")
+                    gr.Markdown("### 세트당 운동 시간")
                     pace = gr.Plot(show_label=False)
                     pace_note = gr.Markdown(elem_id="plot-caption")
                 with gr.Column(elem_classes=["chart"]):
-                    gr.Markdown("### 종목별 자세 정확도")
+                    gr.Markdown("### 운동별 동작 인정률")
                     scores = gr.Plot(show_label=False)
             gr.Markdown("### 최근 운동 기록")
             records = gr.Dataframe(
@@ -1520,7 +1537,7 @@ def build_dashboard(trainer, history):
             )
             read_error = gr.Markdown()
             gr.Markdown(
-                "성공과 불인정을 합쳐 판정 횟수를 계산합니다. 정확도는 관절 각도와 자세 기준의 충족률입니다.",
+                "동작 인정률은 판정한 동작 중 자세 기준을 충족한 비율이에요. 인식이 끊기거나 끝내지 못한 동작은 계산에서 제외해요.",
                 elem_id="detail-note",
             )
 
