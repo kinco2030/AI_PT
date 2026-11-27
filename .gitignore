@@ -8,3 +8,13 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local app environment, models, workout records, caches and logs
+.venv*/
+ai_pt_trainer_files/
+.env
+.env.*
+!.env.example
+*.log
+.pytest_cache/
+.ruff_cache/
